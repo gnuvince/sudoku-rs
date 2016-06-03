@@ -1,6 +1,14 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 const N: usize = 9;
+
+fn row(linear_index: usize) -> usize {
+    linear_index / N
+}
+
+fn col(linear_index: usize) -> usize {
+    linear_index % N
+}
 
 struct SudokuBoard {
     /// Cells are represented by a linear vector of sets.
@@ -9,12 +17,12 @@ struct SudokuBoard {
     ///   current state, is unsolvable.
     /// - If the set is a singleton, we have found the solution
     ///   for the current cell.
-    cells: Vec<HashSet<usize>>
+    cells: Vec<BTreeSet<usize>>
 }
 
 impl SudokuBoard {
     fn from_str(descr: &str) -> Self {
-        let mut v: Vec<HashSet<usize>> = Vec::with_capacity(N*N);
+        let mut v: Vec<BTreeSet<usize>> = Vec::with_capacity(N*N);
         for c in descr.chars() {
             match c {
                 '.' => {
@@ -35,70 +43,88 @@ impl SudokuBoard {
     }
 
     fn is_solved(&self) -> bool {
-        self.cells.iter().all(|set| set.len() == 1)
+        self.cells.iter().all(|candidates| candidates.len() == 1)
     }
 
-    fn get<'a>(&'a self, row: usize, col: usize) -> &'a HashSet<usize> {
-        &self.cells[N*row + col]
+    fn cell_is_solved(&self, idx: usize) -> bool {
+        self.cells[idx].len() == 1
     }
 
-    fn candidates_for(&self, row: usize, col: usize) -> HashSet<usize> {
-        let mut s = self.get(row, col).clone();
 
-        // Row
+    /// Return the  indices of the neighbors of a cell, i.e.,
+    /// the indices of the cells in the same row, same column and same
+    /// square group.
+    fn neighbors(&self, idx: usize) -> BTreeSet<usize> {
+        let mut neighbor_indices = BTreeSet::new();
+
+        // Row & column
         for i in 0..N {
-            if i != col {
-                let t = self.get(row, i);
-                if t.len() == 1 {
-                    for x in t {
-                        s.remove(x);
-                    }
-                }
+            let row_idx = row(idx) + i;
+            if row_idx != idx {
+                neighbor_indices.insert(row_idx);
             }
-        }
 
-        // Col
-        for i in 0..N {
-            if i != row {
-                let t = self.get(i, col);
-                if t.len() == 1 {
-                    for x in t {
-                        s.remove(x);
-                    }
-                }
+            let col_idx = (N*i) + col(idx);
+            if col_idx != idx {
+                neighbor_indices.insert(col_idx);
             }
         }
 
         // Group
-        let gx = 3 * (row / 3);
-        let gy = 3 * (col / 3);
-        for i in gx..gx+3 {
-            for j in gy..gy+3 {
-                if i != row && j != col {
-                    let t = self.get(i, j);
-                    if t.len() == 1 {
-                        for x in t {
-                            s.remove(x);
-                        }
-                    }
+        let x = 3 * (row(idx) / 3);
+        let y = 3 * (col(idx) / 3);
+        for i in x .. x+3 {
+            for j in y .. y+3 {
+                let group_idx = (N*i) + j;
+                if group_idx != idx {
+                    neighbor_indices.insert(group_idx);
                 }
             }
         }
 
-        return s;
+        neighbor_indices
     }
 
+    /*
+    fn update_candidates(&mut self, row: usize, col: usize) {
+        if self.cell_is_solved(linear_index(row, col)) {
+            return;
+        }
 
+        // Put non-candidates in a vector, because we cannot
+        // do self.cells[idx].remove(x) since self.cells is
+        // already borrowed.
+        let mut non_candidates: Vec<usize> = Vec::new();
+        for n in self.neighbors(row, col) {
+            if self.cell_is_solved(n) {
+                for x in self.cells[n].iter() {
+                    non_candidates.push(*x);
+                }
+            }
+        }
+        let idx = linear_index(row, col);
+        for nc in non_candidates {
+            self.cells[idx].remove(&nc);
+        }
+    }
+    */
+    fn print(&self) {
+        for i in 0..N*N {
+            if self.cell_is_solved(i) {
+                for c in self.cells[i].iter() {
+                    print!("{}", c);
+                }
+            } else {
+                print!(".");
+            }
+        }
+        println!("");
+    }
 }
 
-fn main() {
-    let sb = SudokuBoard::from_str(
-        "12..............................................................................."
-    );
 
-    println!("{:?}", sb.is_solved());
-    println!("{:?}", sb.candidates_for(0, 0));
-    println!("{:?}", sb.candidates_for(0, 1));
-    println!("{:?}", sb.candidates_for(1, 0));
-    println!("{:?}", sb.candidates_for(2, 2));
+fn main() {
+    let mut sb = SudokuBoard::from_str(
+        "............942.8.16.....29........89.6.....14..25......4.......2...8.9..5....7.."
+    );
 }
