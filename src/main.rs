@@ -1,130 +1,224 @@
+use std::char;
 use std::collections::BTreeSet;
 
-const N: usize = 9;
+const NSQRT: usize = 3;
+const N: usize = NSQRT * NSQRT;
+const NSQ: usize = N*N;
 
-fn row(linear_index: usize) -> usize {
-    linear_index / N
+/// Return the 0-based row index of `cell`.
+fn row(cell: usize) -> usize {
+    cell / N
 }
 
-fn col(linear_index: usize) -> usize {
-    linear_index % N
+/// Return the 0-based row index of `cell`.
+fn col(cell: usize) -> usize {
+    cell % N
 }
 
-struct SudokuBoard {
-    /// Cells are represented by a linear vector of sets.
-    /// Each set contains the possible values for a cell.
-    /// - If the set for a cell is empty, the board, in its
-    ///   current state, is unsolvable.
-    /// - If the set is a singleton, we have found the solution
-    ///   for the current cell.
-    cells: Vec<BTreeSet<usize>>
+/// Return the 0-based index of the upper-left cell of `cell`'s group.
+fn group(cell: usize) -> usize {
+    let r = row(cell);
+    let c = col(cell);
+    (N * (r - r % NSQRT)) + (c - c % NSQRT)
 }
+
+fn neighbors(cell: usize) -> BTreeSet<usize> {
+    let mut all_neighbors: BTreeSet<usize> = BTreeSet::new();
+
+    // Neighbors on row
+    for col in 0..N {
+        all_neighbors.insert((N * row(cell)) + col);
+    }
+
+    // Neighbors on column
+    for row in 0..N {
+        all_neighbors.insert((N * row) + col(cell));
+    }
+
+    // Neighbors in group
+    let leader = group(cell);
+    for r in row(leader) .. row(leader) + NSQRT {
+        for c in col(leader) .. col(leader) + NSQRT {
+            all_neighbors.insert(N * r + c);
+        }
+    }
+
+    all_neighbors.remove(&cell);
+    return all_neighbors;
+}
+
+#[derive(Debug)]
+struct SudokuBoard(Vec<u8>);
 
 impl SudokuBoard {
-    fn from_str(descr: &str) -> Self {
-        let mut v: Vec<BTreeSet<usize>> = Vec::with_capacity(N*N);
-        for c in descr.chars() {
-            match c {
-                '.' => {
-                    v.push((1..N+1).collect());
-                }
+    fn from_str(digits: &str) -> Self {
+        let mut v = Vec::with_capacity(NSQ);
+        for d in digits.chars() {
+            match d {
+                '.' => { v.push(0); }
                 '1' ... '9' => {
-                    // There ought to be a simpler way to create a singleton set.
-                    let n = c.to_digit(10).unwrap() as usize;
-                    let s = vec![n].into_iter().collect();
-                    v.push(s);
+                    let n = d.to_digit(10).unwrap() as u8;
+                    v.push(n);
                 }
-                _ => {
-                    panic!("Not a valid string")
-                }
+                _ => { panic!("invalid digit ({:?}) in string", d); }
             }
         }
-        SudokuBoard { cells: v }
+        SudokuBoard(v)
     }
 
-    fn is_solved(&self) -> bool {
-        self.cells.iter().all(|candidates| candidates.len() == 1)
-    }
-
-    fn cell_is_solved(&self, idx: usize) -> bool {
-        self.cells[idx].len() == 1
-    }
-
-
-    /// Return the  indices of the neighbors of a cell, i.e.,
-    /// the indices of the cells in the same row, same column and same
-    /// square group.
-    fn neighbors(&self, idx: usize) -> BTreeSet<usize> {
-        let mut neighbor_indices = BTreeSet::new();
-
-        // Row & column
-        for i in 0..N {
-            let row_idx = row(idx) + i;
-            if row_idx != idx {
-                neighbor_indices.insert(row_idx);
-            }
-
-            let col_idx = (N*i) + col(idx);
-            if col_idx != idx {
-                neighbor_indices.insert(col_idx);
-            }
-        }
-
-        // Group
-        let x = 3 * (row(idx) / 3);
-        let y = 3 * (col(idx) / 3);
-        for i in x .. x+3 {
-            for j in y .. y+3 {
-                let group_idx = (N*i) + j;
-                if group_idx != idx {
-                    neighbor_indices.insert(group_idx);
-                }
-            }
-        }
-
-        neighbor_indices
-    }
-
-    /*
-    fn update_candidates(&mut self, row: usize, col: usize) {
-        if self.cell_is_solved(linear_index(row, col)) {
-            return;
-        }
-
-        // Put non-candidates in a vector, because we cannot
-        // do self.cells[idx].remove(x) since self.cells is
-        // already borrowed.
-        let mut non_candidates: Vec<usize> = Vec::new();
-        for n in self.neighbors(row, col) {
-            if self.cell_is_solved(n) {
-                for x in self.cells[n].iter() {
-                    non_candidates.push(*x);
-                }
-            }
-        }
-        let idx = linear_index(row, col);
-        for nc in non_candidates {
-            self.cells[idx].remove(&nc);
-        }
-    }
-    */
-    fn print(&self) {
-        for i in 0..N*N {
-            if self.cell_is_solved(i) {
-                for c in self.cells[i].iter() {
-                    print!("{}", c);
-                }
+    fn to_str(&self) -> String {
+        /*
+        let mut s = String::with_capacity(NSQ);
+        for n in self.0.iter() {
+            if *n == 0 {
+                s.push('.');
             } else {
-                print!(".");
+                s.push(char::from_digit(*n as u32, 10).unwrap());
             }
         }
-        println!("");
+        s
+         */
+        let mut s = String::with_capacity(N + NSQ);
+        let mut i = 0;
+        for n in self.0.iter() {
+            if i % N == 0 {
+                s.push('\n');
+            }
+            if *n == 0 {
+                s.push('.');
+            } else {
+                s.push(char::from_digit(*n as u32, 10).unwrap());
+            }
+            i += 1;
+        }
+        s
+    }
+
+    fn is_solved(&self, cell: usize) -> bool {
+        self.0[cell] != 0
+    }
+
+    fn candidates(&self, cell: usize) -> BTreeSet<u8> {
+        let mut non_candidates = BTreeSet::new();
+        for n in neighbors(cell) {
+            let x = self.0[n];
+            if x != 0 {
+                non_candidates.insert(x);
+            }
+        }
+        let mut candidates: BTreeSet<u8> = (1_u8 .. (N+1) as u8).collect();
+        for nc in non_candidates {
+            candidates.remove(&nc);
+        }
+        candidates
+    }
+
+    fn solve(&mut self, cell: usize) -> bool {
+        if cell >= NSQ {
+            return true;
+        }
+
+        if self.is_solved(cell) {
+            return self.solve(cell + 1);
+        }
+
+        for c in self.candidates(cell) {
+            self.0[cell] = c;
+            if self.solve(cell + 1) {
+                return true;
+            } else {
+                self.0[cell] = 0;
+            }
+        }
+        return false;
     }
 }
 
-
 fn main() {
-    let mut sb = SudokuBoard::from_str(
-        "............942.8.16.....29........89.6.....14..25......4.......2...8.9..5....7.."
-    );
+    let mut sb = SudokuBoard::from_str(".94...13..............76..2.8..1.....32.........2...6.....5.4.......8..7..63.4..8");
+    println!("{}", sb.to_str());
+    sb.solve(0);
+    println!("{}", sb.to_str());
+}
+
+
+#[test]
+fn test_row_col() {
+    assert_eq!(row(11), 1);
+    assert_eq!(col(11), 2);
+}
+
+#[test]
+fn test_group() {
+    assert_eq!(group(0), 0);
+    assert_eq!(group(1), 0);
+    assert_eq!(group(2), 0);
+    assert_eq!(group(9), 0);
+    assert_eq!(group(10), 0);
+    assert_eq!(group(11), 0);
+    assert_eq!(group(18), 0);
+    assert_eq!(group(19), 0);
+    assert_eq!(group(20), 0);
+    assert_eq!(group(60), 60);
+    assert_eq!(group(61), 60);
+    assert_eq!(group(62), 60);
+    assert_eq!(group(69), 60);
+    assert_eq!(group(70), 60);
+    assert_eq!(group(71), 60);
+    assert_eq!(group(78), 60);
+    assert_eq!(group(79), 60);
+    assert_eq!(group(80), 60);
+}
+
+#[test]
+fn test_is_solved() {
+    let sb = SudokuBoard(vec![0, 1]);
+    assert!(!sb.is_solved(0));
+    assert!(sb.is_solved(1));
+}
+
+#[test]
+fn test_neighbors() {
+    assert!(!neighbors(0).contains(&0));
+    // Neighbors of 0 on the same row
+    assert!(neighbors(0).contains(&1));
+    assert!(neighbors(0).contains(&2));
+    assert!(neighbors(0).contains(&3));
+    assert!(neighbors(0).contains(&4));
+    assert!(neighbors(0).contains(&5));
+    assert!(neighbors(0).contains(&6));
+    assert!(neighbors(0).contains(&7));
+    assert!(neighbors(0).contains(&8));
+    // Neighbors of 0 on the same col
+    assert!(neighbors(0).contains(&9));
+    assert!(neighbors(0).contains(&18));
+    assert!(neighbors(0).contains(&27));
+    assert!(neighbors(0).contains(&36));
+    assert!(neighbors(0).contains(&45));
+    assert!(neighbors(0).contains(&54));
+    assert!(neighbors(0).contains(&63));
+    assert!(neighbors(0).contains(&72));
+    // Neighbors of 0 in the same group
+    assert!(neighbors(0).contains(&1));
+    assert!(neighbors(0).contains(&2));
+    assert!(neighbors(0).contains(&9));
+    assert!(neighbors(0).contains(&10));
+    assert!(neighbors(0).contains(&11));
+    assert!(neighbors(0).contains(&18));
+    assert!(neighbors(0).contains(&19));
+    assert!(neighbors(0).contains(&20));
+}
+
+#[test]
+fn test_candidates() {
+    let sb = SudokuBoard::from_str(".2......34..........6...................................................5........");
+    assert!(!sb.candidates(0).contains(&2));
+    assert!(!sb.candidates(0).contains(&3));
+    assert!(!sb.candidates(0).contains(&4));
+    assert!(!sb.candidates(0).contains(&5));
+    assert!(!sb.candidates(0).contains(&6));
+    assert!(sb.candidates(0).contains(&1));
+    assert!(sb.candidates(0).contains(&7));
+    assert!(sb.candidates(0).contains(&8));
+    assert!(sb.candidates(0).contains(&9));
 }
