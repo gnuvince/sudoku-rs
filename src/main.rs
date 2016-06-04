@@ -67,17 +67,6 @@ impl SudokuBoard {
     }
 
     fn to_str(&self) -> String {
-        /*
-        let mut s = String::with_capacity(NSQ);
-        for n in self.0.iter() {
-            if *n == 0 {
-                s.push('.');
-            } else {
-                s.push(char::from_digit(*n as u32, 10).unwrap());
-            }
-        }
-        s
-         */
         let mut s = String::with_capacity(N + NSQ);
         let mut i = 0;
         for n in self.0.iter() {
