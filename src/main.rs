@@ -22,6 +22,11 @@ fn group(cell: usize) -> usize {
     (N * (r - r % NSQRT)) + (c - c % NSQRT)
 }
 
+/// Return the neighbors of `cell`:
+/// - The cells on the same row;
+/// - The cells on the same column;
+/// - The same in the same group.
+/// Note: `cell` is not a neighbor of itself.
 fn neighbors(cell: usize) -> BTreeSet<usize> {
     let mut all_neighbors: BTreeSet<usize> = BTreeSet::new();
 
@@ -47,10 +52,16 @@ fn neighbors(cell: usize) -> BTreeSet<usize> {
     return all_neighbors;
 }
 
+/// A sudoku board is represented by a vector of bytes.
 #[derive(Debug)]
 struct SudokuBoard(Vec<u8>);
 
 impl SudokuBoard {
+    /// Create a new sudoku board from a string.
+    /// A non-zero digit stands for itself,
+    /// a dot stands for a blank cell,
+    /// anything else is an error.
+    // TODO(vfoley): more error handling (length check)
     fn from_str(digits: &str) -> Self {
         let mut v = Vec::with_capacity(NSQ);
         for d in digits.chars() {
@@ -66,6 +77,7 @@ impl SudokuBoard {
         SudokuBoard(v)
     }
 
+    /// Convert a sudoku board to a rough string representation.
     fn to_str(&self) -> String {
         let mut s = String::with_capacity(N + NSQ);
         let mut i = 0;
@@ -83,10 +95,14 @@ impl SudokuBoard {
         s
     }
 
+    /// A cell is solved if its content is non-zero.
     fn is_solved(&self, cell: usize) -> bool {
         self.0[cell] != 0
     }
 
+    /// Return the list of candidates for a cell.
+    /// The candidates are the digits from 1 to NSQ
+    /// that are *not* solved in any of `cell`'s neighbors.
     fn candidates(&self, cell: usize) -> BTreeSet<u8> {
         let mut non_candidates = BTreeSet::new();
         for n in neighbors(cell) {
@@ -102,6 +118,8 @@ impl SudokuBoard {
         candidates
     }
 
+    /// Solve a sudoku board by backtracking.
+    /// Return true if the board is solved, false otherwise.
     fn solve(&mut self, cell: usize) -> bool {
         if cell >= NSQ {
             return true;
