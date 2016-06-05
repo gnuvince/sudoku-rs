@@ -121,14 +121,21 @@ impl SudokuBoard {
     /// Solve a sudoku board by backtracking.
     /// Return true if the board is solved, false otherwise.
     fn solve(&mut self, cell: usize) -> bool {
+        // If we reach the end of the board (NSQ'th cell),
+        // we have solved the board, i.e., put digits into
+        // cells without backtracking.
         if cell >= NSQ {
             return true;
         }
 
+        // Skip over already-solved cells (initial solutions)
         if self.is_solved(cell) {
             return self.solve(cell + 1);
         }
 
+        // Try the candidates in order.
+        // Loop invariant: self.0[cell] = 0
+        // coming into the loop and exiting the loop.
         for c in self.candidates(cell) {
             self.0[cell] = c;
             if self.solve(cell + 1) {
@@ -137,6 +144,7 @@ impl SudokuBoard {
                 self.0[cell] = 0;
             }
         }
+        // No candidate satisfied the constraints, backtrack.
         return false;
     }
 }
