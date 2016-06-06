@@ -1,9 +1,16 @@
 use std::char;
 use std::collections::BTreeSet;
+use std::io;
+use std::process;
 
 const NSQRT: usize = 3;
 const N: usize = NSQRT * NSQRT;
 const NSQ: usize = N*N;
+
+fn error(msg: String) -> ! {
+    println!("error: {}", msg);
+    process::exit(1);
+}
 
 /// Return the 0-based row index of `cell`.
 fn row(cell: usize) -> usize {
@@ -61,8 +68,11 @@ impl SudokuBoard {
     /// A non-zero digit stands for itself,
     /// a dot stands for a blank cell,
     /// anything else is an error.
-    // TODO(vfoley): more error handling (length check)
     fn from_str(digits: &str) -> Self {
+        if digits.len() != NSQ {
+            error(format!("invalid puzzle length; expected {}, got {}",
+                          NSQ, digits.len()));
+        }
         let mut v = Vec::with_capacity(NSQ);
         for d in digits.chars() {
             match d {
@@ -71,14 +81,26 @@ impl SudokuBoard {
                     let n = d.to_digit(10).unwrap() as u8;
                     v.push(n);
                 }
-                _ => { panic!("invalid digit ({:?}) in string", d); }
+                _ => { error(format!("invalid digit ({:?}) in string", d)); }
             }
         }
         SudokuBoard(v)
     }
 
-    /// Convert a sudoku board to a rough string representation.
     fn to_str(&self) -> String {
+        let mut s = String::with_capacity(NSQ);
+        for n in self.0.iter() {
+            if *n == 0 {
+                s.push('.');
+            } else {
+                s.push(char::from_digit(*n as u32, 10).unwrap());
+            }
+        }
+        s
+    }
+
+    /// Convert a sudoku board to a rough string representation.
+    fn to_matrix(&self) -> String {
         let mut s = String::with_capacity(N + NSQ);
         let mut i = 0;
         for n in self.0.iter() {
@@ -149,11 +171,27 @@ impl SudokuBoard {
     }
 }
 
+
+
 fn main() {
-    let mut sb = SudokuBoard::from_str(".94...13..............76..2.8..1.....32.........2...6.....5.4.......8..7..63.4..8");
-    println!("{}", sb.to_str());
-    sb.solve(0);
-    println!("{}", sb.to_str());
+    let stdin = io::stdin();
+    let mut buf = String::with_capacity(NSQ);
+
+    loop {
+        buf.clear();
+        match stdin.read_line(&mut buf) {
+            Err(e) => { error(format!("I/O error, {:?}", e)); }
+            Ok(0) => { return; }
+            Ok(_) => { /* pass through */ }
+        }
+        let mut sb = SudokuBoard::from_str(&buf.trim());
+        let q = sb.solve(0);
+        if q {
+            println!("{}", sb.to_str());
+        } else {
+            println!("No solution");
+        }
+    }
 }
 
 

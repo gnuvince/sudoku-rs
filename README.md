@@ -2,6 +2,12 @@
 
 A sudoku solver written in Rust.
 
-# Todo
 
-- Replace HashSet with BitSet (?)
+## Build
+
+    $ cargo build --release
+
+
+## Usage
+
+    $ cargo run < sudoku.txt
