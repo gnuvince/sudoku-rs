@@ -1,4 +1,3 @@
-use std::char;
 use std::collections::BTreeSet;
 use std::io;
 use std::process;
@@ -169,10 +168,18 @@ impl SudokuBoard {
         return None;
     }
 
-    fn debug(&self) {
+    fn to_str(&self) -> String {
+        let mut output = String::with_capacity(NSQ);
         for i in 0 .. NSQ {
-            println!("[{:?}]", self.0[i]);
+            if self.cell_solved(i) {
+                for c in self.0[i].iter() {
+                    output.push_str(&format!("{}", c));
+                }
+            } else {
+                output.push('.');
+            }
         }
+        output
     }
 }
 
@@ -191,13 +198,12 @@ fn main() {
         }
         let sb = SudokuBoard::from_str(&buf.trim());
         match sb.solve(0) {
-            Some(_) => { println!("OK"); }
+            Some(solution) => { println!("{}", solution.to_str()); }
             None => { println!("No solution"); }
         }
     }
 }
 
-/*
 #[test]
 fn test_row_col() {
     assert_eq!(row(11), 1);
@@ -225,57 +231,3 @@ fn test_group() {
     assert_eq!(group(79), 60);
     assert_eq!(group(80), 60);
 }
-
-#[test]
-fn test_is_solved() {
-    let sb = SudokuBoard(vec![0, 1]);
-    assert!(!sb.is_solved(0));
-    assert!(sb.is_solved(1));
-}
-
-#[test]
-fn test_neighbors() {
-    assert!(!neighbors(0).contains(&0));
-    // Neighbors of 0 on the same row
-    assert!(neighbors(0).contains(&1));
-    assert!(neighbors(0).contains(&2));
-    assert!(neighbors(0).contains(&3));
-    assert!(neighbors(0).contains(&4));
-    assert!(neighbors(0).contains(&5));
-    assert!(neighbors(0).contains(&6));
-    assert!(neighbors(0).contains(&7));
-    assert!(neighbors(0).contains(&8));
-    // Neighbors of 0 on the same col
-    assert!(neighbors(0).contains(&9));
-    assert!(neighbors(0).contains(&18));
-    assert!(neighbors(0).contains(&27));
-    assert!(neighbors(0).contains(&36));
-    assert!(neighbors(0).contains(&45));
-    assert!(neighbors(0).contains(&54));
-    assert!(neighbors(0).contains(&63));
-    assert!(neighbors(0).contains(&72));
-    // Neighbors of 0 in the same group
-    assert!(neighbors(0).contains(&1));
-    assert!(neighbors(0).contains(&2));
-    assert!(neighbors(0).contains(&9));
-    assert!(neighbors(0).contains(&10));
-    assert!(neighbors(0).contains(&11));
-    assert!(neighbors(0).contains(&18));
-    assert!(neighbors(0).contains(&19));
-    assert!(neighbors(0).contains(&20));
-}
-
-#[test]
-fn test_candidates() {
-    let sb = SudokuBoard::from_str(".2......34..........6...................................................5........");
-    assert!(!sb.candidates(0).contains(&2));
-    assert!(!sb.candidates(0).contains(&3));
-    assert!(!sb.candidates(0).contains(&4));
-    assert!(!sb.candidates(0).contains(&5));
-    assert!(!sb.candidates(0).contains(&6));
-    assert!(sb.candidates(0).contains(&1));
-    assert!(sb.candidates(0).contains(&7));
-    assert!(sb.candidates(0).contains(&8));
-    assert!(sb.candidates(0).contains(&9));
-}
-*/
