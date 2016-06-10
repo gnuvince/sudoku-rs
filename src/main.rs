@@ -61,7 +61,7 @@ fn neighbors(cell: usize) -> BTreeSet<usize> {
 
 /// A sudoku board is represented by a vector of bytes.
 #[derive(Debug)]
-struct SudokuBoard(Vec<u8>);
+struct SudokuBoard(Vec<BTreeSet<usize>>);
 
 impl SudokuBoard {
     /// Create a new sudoku board from a string.
@@ -76,10 +76,14 @@ impl SudokuBoard {
         let mut v = Vec::with_capacity(NSQ);
         for d in digits.chars() {
             match d {
-                '.' => { v.push(0); }
+                '.' => {
+                    let candidates: BTreeSet<usize> = (1 .. N+1).collect();
+                    v.push(candidates);
+                }
                 '1' ... '9' => {
-                    let n = d.to_digit(10).unwrap() as u8;
-                    v.push(n);
+                    let mut singleton = BTreeSet::new();
+                    singleton.insert(d.to_digit(10).unwrap() as usize);
+                    v.push(singleton);
                 }
                 _ => { error(format!("invalid digit ({:?}) in string", d)); }
             }
@@ -87,87 +91,88 @@ impl SudokuBoard {
         SudokuBoard(v)
     }
 
-    fn to_str(&self) -> String {
-        let mut s = String::with_capacity(NSQ);
-        for n in self.0.iter() {
-            if *n == 0 {
-                s.push('.');
-            } else {
-                s.push(char::from_digit(*n as u32, 10).unwrap());
-            }
-        }
-        s
+    fn cell_solved(&self, cell: usize) -> bool {
+        self.0[cell].len() == 1
     }
 
-    /// Convert a sudoku board to a rough string representation.
-    fn to_matrix(&self) -> String {
-        let mut s = String::with_capacity(N + NSQ);
-        let mut i = 0;
-        for n in self.0.iter() {
-            if i % N == 0 {
-                s.push('\n');
-            }
-            if *n == 0 {
-                s.push('.');
-            } else {
-                s.push(char::from_digit(*n as u32, 10).unwrap());
-            }
-            i += 1;
-        }
-        s
+    fn cell_solvable(&self, cell: usize) -> bool {
+        self.0[cell].len() != 0
     }
 
-    /// A cell is solved if its content is non-zero.
-    fn is_solved(&self, cell: usize) -> bool {
-        self.0[cell] != 0
+    fn solved(&self) -> bool {
+        (0 .. NSQ).all(|cell| self.cell_solved(cell))
     }
 
-    /// Return the list of candidates for a cell.
-    /// The candidates are the digits from 1 to NSQ
-    /// that are *not* solved in any of `cell`'s neighbors.
-    fn candidates(&self, cell: usize) -> BTreeSet<u8> {
-        let mut non_candidates = BTreeSet::new();
+    fn solvable(&self) -> bool {
+        (0 .. NSQ).all(|cell| self.cell_solvable(cell))
+    }
+
+    fn non_candidates(&self, cell: usize) -> BTreeSet<usize> {
+        let mut set: BTreeSet<usize> = BTreeSet::new();
         for n in neighbors(cell) {
-            let x = self.0[n];
-            if x != 0 {
-                non_candidates.insert(x);
+            if self.cell_solved(n) {
+                for x in self.0[n].iter() {
+                    set.insert(*x);
+                }
             }
         }
-        let mut candidates: BTreeSet<u8> = (1_u8 .. (N+1) as u8).collect();
-        for nc in non_candidates {
-            candidates.remove(&nc);
-        }
-        candidates
+        set
     }
 
-    /// Solve a sudoku board by backtracking.
-    /// Return true if the board is solved, false otherwise.
-    fn solve(&mut self, cell: usize) -> bool {
-        // If we reach the end of the board (NSQ'th cell),
-        // we have solved the board, i.e., put digits into
-        // cells without backtracking.
+    fn propagate(&self) -> Self {
+        let mut output = SudokuBoard(self.0.clone());
+        loop {
+            let mut candidates_changed = false;
+            for i in 0 .. NSQ {
+                for nc in output.non_candidates(i) {
+                    let q = output.0[i].remove(&nc);
+                    candidates_changed = q || candidates_changed;
+                }
+            }
+            if !candidates_changed {
+                break;
+            }
+        }
+        return output;
+    }
+
+
+    fn solve(&self, cell: usize) -> Option<Self> {
         if cell >= NSQ {
-            return true;
+            return Some(SudokuBoard(self.0.clone()));
         }
 
-        // Skip over already-solved cells (initial solutions)
-        if self.is_solved(cell) {
+        if self.cell_solved(cell) {
             return self.solve(cell + 1);
         }
 
-        // Try the candidates in order.
-        // Loop invariant: self.0[cell] = 0
-        // coming into the loop and exiting the loop.
-        for c in self.candidates(cell) {
-            self.0[cell] = c;
-            if self.solve(cell + 1) {
-                return true;
-            } else {
-                self.0[cell] = 0;
+        let mut newboard = self.propagate();
+
+        if newboard.solved() {
+            return Some(newboard);
+        }
+
+        if !newboard.solvable() {
+            return None;
+        }
+
+        let cell_candidates = newboard.0[cell].clone();
+        for c in cell_candidates.iter() {
+            newboard.0[cell].clear();
+            newboard.0[cell].insert(*c);
+            match newboard.solve(cell + 1) {
+                Some(solved_board) => { return Some(solved_board); }
+                None => { }
             }
         }
-        // No candidate satisfied the constraints, backtrack.
-        return false;
+
+        return None;
+    }
+
+    fn debug(&self) {
+        for i in 0 .. NSQ {
+            println!("[{:?}]", self.0[i]);
+        }
     }
 }
 
@@ -184,17 +189,15 @@ fn main() {
             Ok(0) => { return; }
             Ok(_) => { /* pass through */ }
         }
-        let mut sb = SudokuBoard::from_str(&buf.trim());
-        let q = sb.solve(0);
-        if q {
-            println!("{}", sb.to_str());
-        } else {
-            println!("No solution");
+        let sb = SudokuBoard::from_str(&buf.trim());
+        match sb.solve(0) {
+            Some(_) => { println!("OK"); }
+            None => { println!("No solution"); }
         }
     }
 }
 
-
+/*
 #[test]
 fn test_row_col() {
     assert_eq!(row(11), 1);
@@ -275,3 +278,4 @@ fn test_candidates() {
     assert!(sb.candidates(0).contains(&8));
     assert!(sb.candidates(0).contains(&9));
 }
+*/
