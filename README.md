@@ -10,4 +10,4 @@ A sudoku solver written in Rust.
 
 ## Usage
 
-    $ cargo run < sudoku.txt
+    $ cargo run < problems.txt
