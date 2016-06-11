@@ -36,14 +36,10 @@ fn group(cell: usize) -> usize {
 fn neighbors(cell: usize) -> BTreeSet<usize> {
     let mut all_neighbors: BTreeSet<usize> = BTreeSet::new();
 
-    // Neighbors on row
-    for col in 0..N {
-        all_neighbors.insert((N * row(cell)) + col);
-    }
-
-    // Neighbors on column
-    for row in 0..N {
-        all_neighbors.insert((N * row) + col(cell));
+    // Neighbors in row and column
+    for i in 0..N {
+        all_neighbors.insert((N * row(cell)) + i);
+        all_neighbors.insert((N * i) + col(cell));
     }
 
     // Neighbors in group
@@ -90,22 +86,28 @@ impl SudokuBoard {
         SudokuBoard(v)
     }
 
+    /// A cell is solved if its set of candidates is a singleton.
     fn cell_solved(&self, cell: usize) -> bool {
         self.0[cell].len() == 1
     }
 
+    /// A cell is solvable if it has at least one candidate.
     fn cell_solvable(&self, cell: usize) -> bool {
         self.0[cell].len() != 0
     }
 
+    /// The board is solved if all cells are solved.
     fn solved(&self) -> bool {
         (0 .. NSQ).all(|cell| self.cell_solved(cell))
     }
 
+    /// The board is solvable is all cells are solvable.
     fn solvable(&self) -> bool {
         (0 .. NSQ).all(|cell| self.cell_solvable(cell))
     }
 
+    /// The non-candidates of cells are the solved values in
+    /// the cell's neighbors.
     fn non_candidates(&self, cell: usize) -> BTreeSet<usize> {
         let mut set: BTreeSet<usize> = BTreeSet::new();
         for n in neighbors(cell) {
@@ -118,6 +120,9 @@ impl SudokuBoard {
         set
     }
 
+    /// Remove non-candidates from the cells of the board
+    /// until a fixed point is reached, i.e., no more non-
+    /// candidates can be removed anymore.
     fn propagate(&self) -> Self {
         let mut output = SudokuBoard(self.0.clone());
         loop {
@@ -135,6 +140,10 @@ impl SudokuBoard {
         return output;
     }
 
+    /// Find the index of the unsolved cell with the
+    /// fewest number of candidates.  Helps to speed
+    /// up the solving process by making the search tree
+    /// narrower.
     fn most_promising(&self) -> Option<usize> {
         let mut min_len = N;
         let mut min_index = NSQ;
@@ -157,6 +166,11 @@ impl SudokuBoard {
         }
     }
 
+    /// Solve the Sudoku board:
+    /// 1. Propagate the set constraints
+    /// 2a. If the board is solved, terminate.
+    /// 2b. If the board is unsolvable, backtrack.
+    /// 3. Pick the most promising cell and brute-force it.
     fn solve(&self) -> Option<Self> {
         let mut newboard = self.propagate();
 
@@ -183,6 +197,7 @@ impl SudokuBoard {
         return None;
     }
 
+    /// Convert the board to a linear textual representation.
     fn to_str(&self) -> String {
         let mut output = String::with_capacity(NSQ);
         for i in 0 .. NSQ {
