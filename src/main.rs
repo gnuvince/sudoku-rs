@@ -135,16 +135,29 @@ impl SudokuBoard {
         return output;
     }
 
+    fn most_promising(&self) -> Option<usize> {
+        let mut min_len = N;
+        let mut min_index = NSQ;
 
-    fn solve(&self, cell: usize) -> Option<Self> {
-        if cell >= NSQ {
-            return Some(SudokuBoard(self.0.clone()));
+        for i in 0 .. NSQ {
+            if self.cell_solved(i) {
+                continue;
+            }
+            let len = self.0[i].len();
+            if len < min_len {
+                min_index = i;
+                min_len = len;
+            }
         }
 
-        if self.cell_solved(cell) {
-            return self.solve(cell + 1);
+        if min_index == NSQ {
+            None
+        } else {
+            Some(min_index)
         }
+    }
 
+    fn solve(&self) -> Option<Self> {
         let mut newboard = self.propagate();
 
         if newboard.solved() {
@@ -155,13 +168,15 @@ impl SudokuBoard {
             return None;
         }
 
-        let cell_candidates = newboard.0[cell].clone();
-        for c in cell_candidates.iter() {
-            newboard.0[cell].clear();
-            newboard.0[cell].insert(*c);
-            match newboard.solve(cell + 1) {
-                Some(solved_board) => { return Some(solved_board); }
-                None => { }
+        if let Some(cell) = newboard.most_promising() {
+            let cell_candidates = newboard.0[cell].clone();
+            for c in cell_candidates.iter() {
+                newboard.0[cell].clear();
+                newboard.0[cell].insert(*c);
+                match newboard.solve() {
+                    Some(solved_board) => { return Some(solved_board); }
+                    None => { }
+                }
             }
         }
 
@@ -197,7 +212,7 @@ fn main() {
             Ok(_) => { /* pass through */ }
         }
         let sb = SudokuBoard::from_str(&buf.trim());
-        match sb.solve(0) {
+        match sb.solve() {
             Some(solution) => { println!("{}", solution.to_str()); }
             None => { println!("No solution"); }
         }
