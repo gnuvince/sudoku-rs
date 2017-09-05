@@ -2,9 +2,15 @@ use std::collections::BTreeSet;
 use std::io;
 use std::process;
 
+// Sudoku board constants
 const NSQRT: usize = 3;
 const N: usize = NSQRT * NSQRT;
 const NSQ: usize = N*N;
+
+// Set constants
+type CandidateSet = u32;
+const EMPTY_SET: CandidateSet = 0;
+const FULL_SET: CandidateSet = 0x1FF;
 
 fn error(msg: String) -> ! {
     println!("error: {}", msg);
@@ -54,9 +60,6 @@ fn neighbors_of(cell: usize) -> Vec<usize> {
     return all_neighbors.into_iter().collect();
 }
 
-type CandidateSet = u32;
-const EMPTY_SET: CandidateSet = 0;
-const FULL_SET: CandidateSet = 0x1FF;
 
 /// A sudoku board is represented by a vector of u32's.
 struct SudokuBoard {
@@ -89,6 +92,8 @@ impl SudokuBoard {
             }
         }
 
+        // Neighbor indices never change, so we compute them once,
+        // and store them in the struct.
         let mut neighbors: Vec<Vec<usize>> = Vec::with_capacity(NSQ);
         for i in 0 .. NSQ {
             neighbors.push(neighbors_of(i));
@@ -117,16 +122,14 @@ impl SudokuBoard {
         (0 .. NSQ).all(|cell| self.cell_solvable(cell))
     }
 
-    /// The non-candidates of cells are the solved values in
+    /// The non-candidates of a cell are the solved values in
     /// the cell's neighbors.
     fn non_candidates(&self, cell: usize) -> u32 {
         let mut set: u32 = EMPTY_SET;
         for &n in self.neighbors[cell].iter() {
-            // Branchless version of:
-            // `if self.cell_solved(n) { set |= self.cells[n]; }`
             set |= self.cells[n] * (self.cell_solved(n) as u32);
         }
-        set
+        return set;
     }
 
     /// Remove non-candidates from the cells of the board
@@ -213,7 +216,7 @@ impl SudokuBoard {
         let mut output = String::with_capacity(NSQ);
         for i in 0 .. NSQ {
             if self.cell_solved(i) {
-                output.push_str(&format!("{}", get_singleton(self.cells[i])));
+                output.push_str(&format!("{}", set_to_num(self.cells[i])));
             } else {
                 output.push('.');
             }
@@ -223,7 +226,7 @@ impl SudokuBoard {
 }
 
 
-fn get_singleton(mut s: CandidateSet) -> u32 {
+fn set_to_num(mut s: CandidateSet) -> u32 {
     let mut i = 0;
     while s != 0 {
         i += 1;
