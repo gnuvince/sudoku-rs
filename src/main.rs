@@ -28,12 +28,12 @@ fn group(cell: usize) -> usize {
     (N * (r - r % NSQRT)) + (c - c % NSQRT)
 }
 
-/// Return the neighbors of `cell`:
+/// Return the neighbors (indices) of `cell`:
 /// - The cells on the same row;
 /// - The cells on the same column;
 /// - The same in the same group.
 /// Note: `cell` is not a neighbor of itself.
-fn neighbors(cell: usize) -> BTreeSet<usize> {
+fn neighbors_of(cell: usize) -> Vec<usize> {
     let mut all_neighbors: BTreeSet<usize> = BTreeSet::new();
 
     // Neighbors in row and column
@@ -51,12 +51,19 @@ fn neighbors(cell: usize) -> BTreeSet<usize> {
     }
 
     all_neighbors.remove(&cell);
-    return all_neighbors;
+    return all_neighbors.into_iter().collect();
 }
 
-/// A sudoku board is represented by a vector of bytes.
-#[derive(Debug)]
-struct SudokuBoard(Vec<BTreeSet<usize>>);
+type CandidateSet = u32;
+const EMPTY_SET: CandidateSet = 0;
+const FULL_SET: CandidateSet = 0x1FF;
+
+/// A sudoku board is represented by a vector of u32's.
+struct SudokuBoard {
+    cells: Vec<CandidateSet>,
+    neighbors: Vec<Vec<usize>>,
+}
+
 
 impl SudokuBoard {
     /// Create a new sudoku board from a string.
@@ -68,32 +75,36 @@ impl SudokuBoard {
             error(format!("invalid puzzle length; expected {}, got {}",
                           NSQ, digits.len()));
         }
-        let mut v = Vec::with_capacity(NSQ);
+        let mut cells = Vec::with_capacity(NSQ);
         for d in digits.chars() {
             match d {
                 '.' => {
-                    let candidates: BTreeSet<usize> = (1 .. N+1).collect();
-                    v.push(candidates);
+                    cells.push(FULL_SET);
                 }
                 '1' ... '9' => {
-                    let mut singleton = BTreeSet::new();
-                    singleton.insert(d.to_digit(10).unwrap() as usize);
-                    v.push(singleton);
+                    let n = d.to_digit(10).unwrap() as usize;
+                    cells.push(1 << (n - 1));
                 }
                 _ => { error(format!("invalid digit ({:?}) in string", d)); }
             }
         }
-        SudokuBoard(v)
+
+        let mut neighbors: Vec<Vec<usize>> = Vec::with_capacity(NSQ);
+        for i in 0 .. NSQ {
+            neighbors.push(neighbors_of(i));
+        }
+
+        return SudokuBoard { cells, neighbors };
     }
 
     /// A cell is solved if its set of candidates is a singleton.
     fn cell_solved(&self, cell: usize) -> bool {
-        self.0[cell].len() == 1
+        self.cells[cell].count_ones() == 1
     }
 
     /// A cell is solvable if it has at least one candidate.
     fn cell_solvable(&self, cell: usize) -> bool {
-        self.0[cell].len() != 0
+        self.cells[cell] != 0
     }
 
     /// The board is solved if all cells are solved.
@@ -108,14 +119,12 @@ impl SudokuBoard {
 
     /// The non-candidates of cells are the solved values in
     /// the cell's neighbors.
-    fn non_candidates(&self, cell: usize) -> BTreeSet<usize> {
-        let mut set: BTreeSet<usize> = BTreeSet::new();
-        for n in neighbors(cell) {
-            if self.cell_solved(n) {
-                for x in self.0[n].iter() {
-                    set.insert(*x);
-                }
-            }
+    fn non_candidates(&self, cell: usize) -> u32 {
+        let mut set: u32 = EMPTY_SET;
+        for &n in self.neighbors[cell].iter() {
+            // Branchless version of:
+            // `if self.cell_solved(n) { set |= self.cells[n]; }`
+            set |= self.cells[n] * (self.cell_solved(n) as u32);
         }
         set
     }
@@ -124,14 +133,16 @@ impl SudokuBoard {
     /// until a fixed point is reached, i.e., no more non-
     /// candidates can be removed anymore.
     fn propagate(&self) -> Self {
-        let mut output = SudokuBoard(self.0.clone());
+        let mut output = SudokuBoard {
+            cells: self.cells.clone(),
+            neighbors: self.neighbors.clone()
+        };
         loop {
             let mut candidates_changed = false;
             for i in 0 .. NSQ {
-                for nc in output.non_candidates(i) {
-                    let q = output.0[i].remove(&nc);
-                    candidates_changed = q || candidates_changed;
-                }
+                let q = output.cells[i] & !output.non_candidates(i);
+                candidates_changed = candidates_changed || (q != output.cells[i]);
+                output.cells[i] = q;
             }
             if !candidates_changed {
                 break;
@@ -152,7 +163,7 @@ impl SudokuBoard {
             if self.cell_solved(i) {
                 continue;
             }
-            let len = self.0[i].len();
+            let len = self.cells[i].count_ones() as usize;
             if len < min_len {
                 min_index = i;
                 min_len = len;
@@ -174,19 +185,19 @@ impl SudokuBoard {
     fn solve(&self) -> Option<Self> {
         let mut newboard = self.propagate();
 
-        if newboard.solved() {
-            return Some(newboard);
-        }
+        if newboard.solved() { return Some(newboard); }
 
-        if !newboard.solvable() {
-            return None;
-        }
+        if !newboard.solvable() { return None; }
 
         if let Some(cell) = newboard.most_promising() {
-            let cell_candidates = newboard.0[cell].clone();
-            for c in cell_candidates.iter() {
-                newboard.0[cell].clear();
-                newboard.0[cell].insert(*c);
+            let cell_candidates = newboard.cells[cell];
+
+            for c in 0 .. N {
+                if cell_candidates & (1 << c) == 0 {
+                    continue;
+                }
+
+                newboard.cells[cell] = 1 << c;
                 match newboard.solve() {
                     Some(solved_board) => { return Some(solved_board); }
                     None => { }
@@ -202,9 +213,7 @@ impl SudokuBoard {
         let mut output = String::with_capacity(NSQ);
         for i in 0 .. NSQ {
             if self.cell_solved(i) {
-                for c in self.0[i].iter() {
-                    output.push_str(&format!("{}", c));
-                }
+                output.push_str(&format!("{}", get_singleton(self.cells[i])));
             } else {
                 output.push('.');
             }
@@ -213,6 +222,15 @@ impl SudokuBoard {
     }
 }
 
+
+fn get_singleton(mut s: CandidateSet) -> u32 {
+    let mut i = 0;
+    while s != 0 {
+        i += 1;
+        s >>= 1;
+    }
+    return i;
+}
 
 
 fn main() {
