@@ -62,18 +62,18 @@ fn neighbors_of(cell: usize) -> Vec<usize> {
 
 
 /// A sudoku board is represented by a vector of u32's.
-struct SudokuBoard {
+struct SudokuBoard<'a> {
     cells: Vec<CandidateSet>,
-    neighbors: Vec<Vec<usize>>,
+    neighbors: &'a Vec<Vec<usize>>,
 }
 
 
-impl SudokuBoard {
+impl <'a> SudokuBoard<'a> {
     /// Create a new sudoku board from a string.
     /// A non-zero digit stands for itself,
     /// a dot stands for a blank cell,
     /// anything else is an error.
-    fn from_str(digits: &str) -> Self {
+    fn from_str(digits: &str, neighbors: &'a Vec<Vec<usize>>) -> Self {
         if digits.len() != NSQ {
             error(format!("invalid puzzle length; expected {}, got {}",
                           NSQ, digits.len()));
@@ -90,13 +90,6 @@ impl SudokuBoard {
                 }
                 _ => { error(format!("invalid digit ({:?}) in string", d)); }
             }
-        }
-
-        // Neighbor indices never change, so we compute them once,
-        // and store them in the struct.
-        let mut neighbors: Vec<Vec<usize>> = Vec::with_capacity(NSQ);
-        for i in 0 .. NSQ {
-            neighbors.push(neighbors_of(i));
         }
 
         return SudokuBoard { cells, neighbors };
@@ -138,7 +131,7 @@ impl SudokuBoard {
     fn propagate(&self) -> Self {
         let mut output = SudokuBoard {
             cells: self.cells.clone(),
-            neighbors: self.neighbors.clone()
+            neighbors: self.neighbors
         };
         loop {
             let mut candidates_changed = false;
@@ -240,6 +233,13 @@ fn main() {
     let stdin = io::stdin();
     let mut buf = String::with_capacity(NSQ);
 
+    // Neighbor indices never change, so we compute them once,
+    // and store them in the struct.
+    let mut neighbors: Vec<Vec<usize>> = Vec::with_capacity(NSQ);
+    for i in 0 .. NSQ {
+        neighbors.push(neighbors_of(i));
+    }
+
     loop {
         buf.clear();
         match stdin.read_line(&mut buf) {
@@ -247,7 +247,7 @@ fn main() {
             Ok(0) => { return; }
             Ok(_) => { /* pass through */ }
         }
-        let sb = SudokuBoard::from_str(&buf.trim());
+        let sb = SudokuBoard::from_str(&buf.trim(), &neighbors);
         match sb.solve() {
             Some(solution) => { println!("{}", solution.to_str()); }
             None => { println!("No solution"); }
