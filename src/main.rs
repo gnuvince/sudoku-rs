@@ -100,19 +100,14 @@ impl <'a> SudokuBoard<'a> {
         self.cells[cell].count_ones() == 1
     }
 
-    /// A cell is solvable if it has at least one candidate.
-    fn cell_solvable(&self, cell: usize) -> bool {
-        self.cells[cell] != 0
-    }
-
     /// The board is solved if all cells are solved.
     fn solved(&self) -> bool {
-        (0 .. NSQ).all(|cell| self.cell_solved(cell))
+        self.cells.iter().all(|c| c.count_ones() == 1)
     }
 
     /// The board is solvable is all cells are solvable.
     fn solvable(&self) -> bool {
-        (0 .. NSQ).all(|cell| self.cell_solvable(cell))
+        self.cells.iter().all(|c| *c != 0)
     }
 
     /// The non-candidates of a cell are the solved values in
