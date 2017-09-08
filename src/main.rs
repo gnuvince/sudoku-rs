@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 use std::io;
 use std::process;
+use std::sync::Arc;
+use std::thread;
 
 // Sudoku board constants
 const NSQRT: usize = 3;
@@ -62,18 +64,18 @@ fn neighbors_of(cell: usize) -> Vec<usize> {
 
 
 /// A sudoku board is represented by a vector of u32's.
-struct SudokuBoard<'a> {
+struct SudokuBoard {
     cells: Vec<CandidateSet>,
-    neighbors: &'a Vec<Vec<usize>>,
+    neighbors: Arc<Vec<Vec<usize>>>,
 }
 
 
-impl <'a> SudokuBoard<'a> {
+impl SudokuBoard {
     /// Create a new sudoku board from a string.
     /// A non-zero digit stands for itself,
     /// a dot stands for a blank cell,
     /// anything else is an error.
-    fn from_str(digits: &str, neighbors: &'a Vec<Vec<usize>>) -> Self {
+    fn from_str(digits: &str, neighbors: Arc<Vec<Vec<usize>>>) -> Self {
         if digits.len() != NSQ {
             error(format!("invalid puzzle length; expected {}, got {}",
                           NSQ, digits.len()));
@@ -126,7 +128,7 @@ impl <'a> SudokuBoard<'a> {
     fn propagate(&self) -> Self {
         let mut output = SudokuBoard {
             cells: self.cells.clone(),
-            neighbors: self.neighbors
+            neighbors: self.neighbors.clone()
         };
         loop {
             let mut candidates_changed = false;
@@ -235,17 +237,31 @@ fn main() {
         neighbors.push(neighbors_of(i));
     }
 
+    let arc_neighbors = Arc::new(neighbors);
+
+    let mut handles = Vec::new();
+
     loop {
         buf.clear();
         match stdin.read_line(&mut buf) {
             Err(e) => { error(format!("I/O error, {:?}", e)); }
-            Ok(0) => { return; }
+            Ok(0) => { break; }
             Ok(_) => { /* pass through */ }
         }
-        let sb = SudokuBoard::from_str(&buf.trim(), &neighbors);
-        match sb.solve() {
-            Some(solution) => { println!("{}", solution.to_str()); }
-            None => { println!("No solution"); }
+
+        let an = arc_neighbors.clone();
+        let board_desc = buf.trim().to_string();
+        handles.push(thread::spawn(move || {
+            let sb = SudokuBoard::from_str(&board_desc, an);
+            sb.solve()
+        }));
+    }
+
+    for h in handles {
+        match h.join() {
+            Ok(Some(solution)) => { println!("{}", solution.to_str()); }
+            Ok(None) => { eprintln!("error: no solution"); }
+            Err(_) => { eprintln!("error"); }
         }
     }
 }
